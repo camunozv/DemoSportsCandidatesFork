@@ -31,18 +31,18 @@ def create_app() -> FastAPI:
     # NUEVO: Pre-carga de modelos al iniciar la aplicación
     @app.on_event("startup")
     async def startup_event():
-        print("🚀 Iniciando Complete Soccer Analysis API v2.0...")
-        print("📦 Pre-cargando modelos...")
+        print(" Iniciando Complete Soccer Analysis API v2.0...")
+        print(" Pre-cargando modelos...")
         
         # Esto fuerza la carga de los modelos en el @lru_cache
         from app.api.deps import analysis_service
         service = analysis_service()
         
-        print(f"✓ Modelos cargados:")
+        print(f" Modelos cargados:")
         print(f"  - Reconocimiento facial: {service.face_rec.loaded}")
         print(f"  - Goal Classifier: {service.goal_clf.model is not None}")
         print(f"  - Jersey Detector (YOLO): {service.jersey_det.yolo is not None}")
-        print("✅ Sistema listo!")
+        print(" Sistema listo!")
     
     return app
 
