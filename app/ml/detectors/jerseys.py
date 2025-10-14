@@ -16,18 +16,22 @@ class JerseyDetector:
             "celeste jersey", "navy blue jersey"
         ]
         
+        # The try catch block is in charge of loading the YOLO model
+        # using the path in our settings function "get_settings"
         try:
             from ultralytics import YOLOWorld
             s = get_settings()
-            weights_path = s.YOLO_WORLD_S_PATH
+            weights_path = s.YOLO_WORLD_S_PATH 
             model = YOLOWorld(weights_path)
-            self.yolo = model
-            self.yolo.set_classes(self.custom_classes)
+            self.yolo = model # seteamos el modelo que queremos utilizar
+            self.yolo.set_classes(self.custom_classes) # Le pasamos al modelo las clases que queremos detectar
             print("✓ YOLOWorld cargado correctamente")
         except Exception as e:
             print(f"⚠ YOLOWorld no disponible: {e}")
             self.yolo = None
 
+    # Detectamos las camisetas mediante la función detect_with_yolo
+    # Recibimos la imagen como un arreglo de numpy 
     def detect_with_yolo(self, image: np.ndarray) -> List[JerseyDetection]:
         """Detectar camisetas usando YOLOWorld de ultralytics"""
         # CORREGIDO: ahora usa self.yolo en lugar de self.yolo_model
@@ -37,33 +41,49 @@ class JerseyDetector:
         
         try:
             print("Ejecutando YOLOWorld...")
+            # Corremos yolo world sobre la imagen que recibimos y obtenemos los resultados
             results = self.yolo(image, conf=0.25, verbose=False)
             
             detections = []
             
+            # Recorremos los resultados de la detección realizada por YOLO
             for result in results:
+                
+                # Si hay boxes dentro de los resultados quiere decir que detectamos algo dentro de la imagen
                 if result.boxes is not None and len(result.boxes) > 0:
                     boxes = result.boxes
+                    
+                    # El número de cajas detectadas se corresponde con el núemero de objetos detectados
                     print(f"YOLOWorld detectó {len(boxes)} objetos")
                     
+                    # Enumeramos las cajas que obtenemos usando enumerate y un indice que por defecto arranca en 0
                     for i, box in enumerate(boxes):
+                        
+                        # Obtenemos las coordenadas de la caja que encierra el objeto
                         x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                        
+                        # Obtenemos un id de clase y una puntaje que nos dice el nivel de confianza con el que podemos estar dentro de esa clase.
                         confidence = float(box.conf[0].cpu().numpy())
                         class_id = int(box.cls[0].cpu().numpy())
                         
                         print(f"  Objeto {i}: clase_id={class_id}, confianza={confidence:.3f}")
                         
+                        # Realizamos esta validación por que nuestro modelo puede retornar el id de una clase que no le hemos pasado
                         if class_id < len(self.custom_classes):
                             class_name = self.custom_classes[class_id].lower()
                             
+                            # Si en el nombre de la clase hay algo relacionado a Argentina el jersey es de argentina
                             if any(term in class_name for term in ["argentina", "celeste"]):
                                 team = "Argentina"
+                            # Si en el nombre de la clase hay algo relacionado a Francia el jersey es de Francia
                             elif any(term in class_name for term in ["france", "navy", "marine"]):
                                 team = "France"
+                            # Si no se puede determinar correctamente se hace con base a en que mitad de la imagen está el jugador.
                             else:
                                 center_x = (x1 + x2) / 2
                                 team = "Argentina" if center_x < image.shape[1] / 2 else "France"
                             
+                            # Guardamos el resultado en el arreglo de detections como un objeto JerseyDetection, que es un modelo de pydantic
                             detections.append(JerseyDetection(
                                 team=team,
                                 bbox=[int(x1), int(y1), int(x2), int(y2)],
