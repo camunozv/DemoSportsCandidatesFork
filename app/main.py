@@ -1,20 +1,29 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# Imports a function that returns the settings from the core/config.py
 from app.core.config import get_settings
+
+# Imports routers from the api/routers folder
 from app.api.routers import analyze, health, ask, validate
 
 def create_app() -> FastAPI:
+    
+    # Here we get the settings of the config.py file, that file contains sort of environment variables
     s = get_settings()
     app = FastAPI(title="Complete Soccer Analysis API", version="2.0.0")
     
+    # Sets up from which adresses we can receive requests
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=s.CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["GET","POST","PUT","DELETE","OPTIONS"],
-        allow_headers=["*"],
+        allow_origins=s.CORS_ORIGINS, # configured origins in the settings file
+        allow_credentials=True, # allow credentials on requests -> cookies, authorization headers
+        allow_methods=["GET","POST","PUT","DELETE","OPTIONS"], # allowed http methods
+        allow_headers=["*"], 
     )
     
+    # Registers imported routers within the app
+    # per router we have particular routes defined
     app.include_router(analyze.router)
     app.include_router(health.router)
     app.include_router(ask.router)
