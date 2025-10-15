@@ -168,6 +168,7 @@ class JerseyDetector:
         
         if len(yolo_detections) > 0:
             print(f"✓ Usando YOLOWorld: {len(yolo_detections)} detecciones")
+            # Se retorna un arreglo de tipo JerseyDetection de pydantic.
             return yolo_detections
         
         color_detections = self.detect_by_colors(image)
