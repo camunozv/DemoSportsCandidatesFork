@@ -8,6 +8,7 @@ from PIL import Image
 import io
 import time
 
+# Here we get the match validator.
 from app.api.deps import analysis_service, match_validator
 from app.schemas.io import CompleteResponse
 

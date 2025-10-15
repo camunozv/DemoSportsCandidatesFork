@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 import asyncio
 
+# Esta clase simplemente representa un evento dentro del partido.
 class MatchEvent:
     """Representa un evento del partido"""
     def __init__(self, event_type: str, minute: int, team: str, 
@@ -21,12 +22,48 @@ class MatchEventsService:
     """
     Servicio para conectar con API externa de eventos del partido
     """
+    # Recibimos la direcccion de la apy y su llave
     def __init__(self, api_url: str, api_key: Optional[str] = None):
         self.api_url = api_url
         self.api_key = api_key
         self.cache_ttl = 5  # segundos - eventos recientes
         self._cache: Dict[str, tuple[datetime, List[MatchEvent]]] = {}
+           
         
+    def _parse_timestamp(self, ts_str: Optional[str]) -> datetime:
+        """Parsea timestamp de la API"""
+        if not ts_str: # In case our date string is none
+            return datetime.now()
+        try:
+            # We have default dates in iso format, but most of the APIS return
+            # the dates in format that includes the "Z" thats why we replace it 
+            # with "+00:00", if it fails then we return now.
+            return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+        except:
+            return datetime.now()
+        
+        
+    def _parse_events(self, data: Dict) -> List[MatchEvent]:
+        """
+        Parsea la respuesta de la API externa a objetos MatchEvent
+        Adaptar según el formato de tu API
+        """
+        events = []
+        for item in data.get("events", []):
+            # Creamos una lista de events y vamos creando objetos MatchEvent a los cuales les asignamos 
+            # los valores que vengan dentro de nuestra data, los adaptaremos para que funcionen con lo que nuestra API devuelva.
+            
+            # ***************************************** ¡Pendiente de adaptar!
+            events.append(MatchEvent(
+                event_type=item.get("type", "unknown"),
+                minute=item.get("minute", 0),
+                team=item.get("team", ""),
+                player=item.get("player"),
+                timestamp=self._parse_timestamp(item.get("timestamp"))
+            ))
+        return events
+    
+    
     async def get_recent_events(self, match_id: str, last_minutes: int = 2) -> List[MatchEvent]:
         """
         Obtiene eventos recientes del partido (últimos N minutos)
@@ -37,6 +74,8 @@ class MatchEventsService:
         """
         # Verificar cache
         cache_key = f"{match_id}_{last_minutes}"
+        # Sacamos la llave the cache y si la tenemos dentro de nuestras variables de clase,
+        # la podemos utilizar para usar los eventos en cache que verificamos con otro condicional.
         if cache_key in self._cache:
             cached_time, cached_events = self._cache[cache_key]
             if (datetime.now() - cached_time).seconds < self.cache_ttl:
@@ -44,6 +83,7 @@ class MatchEventsService:
         
         # Consultar API externa
         try:
+            # ******************************** ADAPTAR para que funcione con nuestra API.
             async with httpx.AsyncClient() as client:
                 headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
                 response = await client.get(
@@ -55,38 +95,14 @@ class MatchEventsService:
                 response.raise_for_status()
                 data = response.json()
                 
-                events = self._parse_events(data)
-                self._cache[cache_key] = (datetime.now(), events)
+                events = self._parse_events(data) # hacemos el parsing de nuestros eventos y los guardamos en una lista
+                self._cache[cache_key] = (datetime.now(), events) # actualizamos el caché de nuestra API.
                 return events
                 
         except Exception as e:
             print(f"Error consultando eventos del partido: {e}")
             return []
     
-    def _parse_events(self, data: Dict) -> List[MatchEvent]:
-        """
-        Parsea la respuesta de la API externa a objetos MatchEvent
-        Adaptar según el formato de tu API
-        """
-        events = []
-        for item in data.get("events", []):
-            events.append(MatchEvent(
-                event_type=item.get("type", "unknown"),
-                minute=item.get("minute", 0),
-                team=item.get("team", ""),
-                player=item.get("player"),
-                timestamp=self._parse_timestamp(item.get("timestamp"))
-            ))
-        return events
-    
-    def _parse_timestamp(self, ts_str: Optional[str]) -> datetime:
-        """Parsea timestamp de la API"""
-        if not ts_str:
-            return datetime.now()
-        try:
-            return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-        except:
-            return datetime.now()
     
     async def get_current_match_state(self, match_id: str) -> Dict:
         """
@@ -131,16 +147,16 @@ class MatchValidator:
         recent_events = await self.events_service.get_recent_events(match_id, last_minutes=2)
         match_state = await self.events_service.get_current_match_state(match_id)
         
-        # Filtrar solo goles
+        # Filtrar solo goles de los eventos que obtuvimos
         recent_goals = [e for e in recent_events if e.event_type == "goal"]
         
-        # Validar si hay goles recientes
+        # Validar si hay goles recientes, verificamos la cantidad de goles
         is_valid = len(recent_goals) > 0
         
-        # Verificar si el partido está en vivo
+        # Verificar si el partido está en vivo, ver si el partido es en vivo
         is_live = match_state.get("status") == "live"
         
-        # Calcular confianza basada en timing
+        # Calcular confianza basada en timing, se asigna una confianza dependiendo del momento de ocurrencia del gol
         confidence = 1.0 if is_valid else 0.0
         if is_valid and recent_goals:
             # Mayor confianza si el gol fue muy reciente (< 30 segundos)
@@ -153,7 +169,7 @@ class MatchValidator:
             else:
                 confidence = 0.6
         
-        # Validar equipo si se proporciona
+        # Validar equipo si se proporciona, para que no haya confusión entre los anotadores del gol
         team_match = False
         if detected_team and recent_goals:
             team_match = any(g.team.lower() == detected_team.lower() for g in recent_goals)
@@ -181,13 +197,20 @@ class MatchValidator:
         """
         Valida cualquier tipo de evento detectado (gol, falta, córner, etc.)
         """
+        
+        # Obtenemos todos los eventos en los últimos 2 minutos
         recent_events = await self.events_service.get_recent_events(match_id, last_minutes=2)
+        
+        # verificamos los estados del partido
         match_state = await self.events_service.get_current_match_state(match_id)
         
         # Filtrar eventos del tipo específico
         matching_events = [e for e in recent_events if e.event_type == event_type]
         
+        # Detectamos si hay el tipo de evento que buscamos
         is_valid = len(matching_events) > 0
+        
+        # Vemos si el partido es en vivo, es decir es una repetición o no.
         is_live = match_state.get("status") == "live"
         
         return {
