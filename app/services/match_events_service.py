@@ -10,13 +10,17 @@ import asyncio
 # Esta clase simplemente representa un evento dentro del partido.
 class MatchEvent:
     """Representa un evento del partido"""
-    def __init__(self, event_type: str, minute: int, team: str, 
-                 player: Optional[str] = None, timestamp: Optional[datetime] = None):
+    def __init__(self, event_type, minute, team, player, timestamp):
         self.event_type = event_type  # "goal", "corner", "foul", etc.
         self.minute = minute
         self.team = team
         self.player = player
-        self.timestamp = timestamp or datetime.now()
+        self.timestamp = timestamp
+        
+class FrameEvent:
+    def __init__(self, frame_time, goal_event):
+        self.frame_time = frame_time
+        self.goal_event = goal_event
 
 class MatchEventsService:
     """
@@ -49,22 +53,20 @@ class MatchEventsService:
         Adaptar según el formato de tu API
         """
         events = []
-        for item in data.get("events", []):
+        for item in data:
             # Creamos una lista de events y vamos creando objetos MatchEvent a los cuales les asignamos 
             # los valores que vengan dentro de nuestra data, los adaptaremos para que funcionen con lo que nuestra API devuelva.
             
             # ***************************************** ¡Pendiente de adaptar!
-            events.append(MatchEvent(
-                event_type=item.get("type", "unknown"),
-                minute=item.get("minute", 0),
-                team=item.get("team", ""),
-                player=item.get("player"),
-                timestamp=self._parse_timestamp(item.get("timestamp"))
+            events.append(FrameEvent(
+                frame_time=self.frameTime,
+                goal_event=item.goalEvent
             ))
+            
         return events
     
     
-    async def get_recent_events(self, match_id: str, last_minutes: int = 2) -> List[MatchEvent]:
+    async def get_recent_events(self, date_time_str: str) -> List[MatchEvent]:
         """
         Obtiene eventos recientes del partido (últimos N minutos)
         
@@ -72,31 +74,22 @@ class MatchEventsService:
             match_id: ID del partido
             last_minutes: Ventana temporal para buscar eventos
         """
-        # Verificar cache
-        cache_key = f"{match_id}_{last_minutes}"
-        # Sacamos la llave the cache y si la tenemos dentro de nuestras variables de clase,
-        # la podemos utilizar para usar los eventos en cache que verificamos con otro condicional.
-        if cache_key in self._cache:
-            cached_time, cached_events = self._cache[cache_key]
-            if (datetime.now() - cached_time).seconds < self.cache_ttl:
-                return cached_events
         
+        middle_time = datetime.datetime.strptime(date_time_str, "%H:%M:%S.%f").time()
+        
+        start, end = middle_time - datetime.timedelta(seconds=0.5), middle_time + datetime.timedelta(seconds = 0.5)
         # Consultar API externa
         try:
-            # ******************************** ADAPTAR para que funcione con nuestra API.
             async with httpx.AsyncClient() as client:
-                headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
                 response = await client.get(
-                    f"{self.api_url}/matches/{match_id}/events",
-                    headers=headers,
-                    params={"last_minutes": last_minutes},
-                    timeout=5.0
+                    f"http://localhost:8080/events/by-interval",
+                    params={"start": start,
+                            "end": end},
                 )
                 response.raise_for_status()
                 data = response.json()
                 
                 events = self._parse_events(data) # hacemos el parsing de nuestros eventos y los guardamos en una lista
-                self._cache[cache_key] = (datetime.now(), events) # actualizamos el caché de nuestra API.
                 return events
                 
         except Exception as e:
@@ -130,7 +123,7 @@ class MatchValidator:
     def __init__(self, match_events_service: MatchEventsService):
         self.events_service = match_events_service
         
-    async def validate_goal_detection(self, match_id: str, detected_team: Optional[str] = None) -> Dict:
+    async def validate_goal_detection(self, match_id: str, goal_minute: int, detected_team: Optional[str] = None) -> Dict:
         """
         Valida si un gol detectado por el modelo corresponde a un evento real
         
@@ -192,8 +185,7 @@ class MatchValidator:
             "team_match": team_match if detected_team else None
         }
     
-    async def validate_event_detection(self, match_id: str, event_type: str, 
-                                      detected_team: Optional[str] = None) -> Dict:
+    async def validate_event_detection(self, match_id: str, event_type: str, detected_team: Optional[str] = None) -> Dict:
         """
         Valida cualquier tipo de evento detectado (gol, falta, córner, etc.)
         """
@@ -227,3 +219,28 @@ class MatchValidator:
                 for e in matching_events
             ]
         }
+    
+        
+    async def validate_detected_goal(self, mock_event: MatchEvent):
+        
+        """debo hacer la request a mi api externa"""
+        
+        recent_events = await self.events_service.get_recent_events(mock_event.timestamp)
+        
+        c = 0
+        f = 0
+        for e in recent_events:
+            if e.goal_event:
+                c += 1
+            else:
+                f += 1
+        
+        goal_classif = False
+        if (c > f):
+            goal_classif = True
+            
+                
+        return {
+            "live_goal": goal_classif,
+        }
+            

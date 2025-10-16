@@ -14,13 +14,22 @@ from app.schemas.io import CompleteResponse
 
 router = APIRouter(tags=["validate"])
 
+class MatchEvent:
+    """Representa un evento del partido"""
+    def __init__(self, event_type, minute, team, player, timestamp):
+        self.event_type = event_type  # "goal", "corner", "foul", etc.
+        self.minute = minute
+        self.team = team
+        self.player = player
+        self.timestamp = timestamp
+
 
 class ValidateRequest(BaseModel):
     match_id: str
-    event_type: Optional[str] = "goal"  # goal, corner, foul, etc.
+    event_type: Optional[str] = "goal"
     team: Optional[str] = None
-
-
+    
+    
 class ValidatedAnalysisResponse(BaseModel):
     """Respuesta del análisis con validación de eventos"""
     # Datos del análisis normal
@@ -148,3 +157,38 @@ async def check_goal_validity(request: ValidateRequest):
         return validation
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+    
+@router.post("/validate/my_goal")
+async def verificar_si_es_gol(mock_event: MatchEvent): # Here a goal detected must enter
+    try:        
+        
+        # Pass the mock event to this function.
+        analysis_result = analysis_service().mock_analysis(mock_event) # implemented
+        
+        # Validar contra eventos reales
+        validator = match_validator()
+        
+        # Detectar si es un gol
+        the_event = analysis_result.event_type.lower()
+        
+        if "goal" in the_event:
+            # Validar gol detectado
+            validation = await validator.validate_detected_goal(mock_event)
+        else:
+            # Validar otro tipo de evento
+            validation = await validator.validate_detected_event(mock_event)
+                                    
+        return ValidatedAnalysisResponse(
+            analysis=None,
+            validation=validation,
+            is_live_event=None,
+            is_replay=None,
+            confidence_score=None
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error en análisis validado: {e}"
+        )  

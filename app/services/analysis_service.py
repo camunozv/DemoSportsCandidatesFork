@@ -120,3 +120,6 @@ class AnalysisService:
             image_processed=True,
             total_detections=len(faces_out) + len(jerseys),
         )
+    
+    def mock_analysis(detected_event):        
+        return detected_event.event_type
