@@ -121,5 +121,5 @@ class AnalysisService:
             total_detections=len(faces_out) + len(jerseys),
         )
     
-    def mock_analysis(detected_event):        
+    def mock_analysis(self, detected_event):        
         return detected_event.event_type

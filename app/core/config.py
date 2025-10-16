@@ -36,10 +36,10 @@ class Settings(BaseSettings):
     # OpenAI / CORS etc...
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
     OPENAI_MODEL_ID: str = os.getenv("MODEL_ID", "gpt-4.1-mini")
-    CORS_ORIGINS: List[str] = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://demo-world-cup-ts.kontent-dev.com",
+    CORS_ORIGINS: List[str] = [ "*"
+        #"http://localhost:5173",
+        #"http://127.0.0.1:5173",
+        #"https://demo-world-cup-ts.kontent-dev.com",
     ]
 
     # Configuración de pydantic v2

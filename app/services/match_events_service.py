@@ -59,8 +59,8 @@ class MatchEventsService:
             
             # ***************************************** ¡Pendiente de adaptar!
             events.append(FrameEvent(
-                frame_time=self.frameTime,
-                goal_event=item.goalEvent
+                frame_time=item['frameTime'],
+                goal_event=item['goalEvent']
             ))
             
         return events
@@ -75,10 +75,16 @@ class MatchEventsService:
             last_minutes: Ventana temporal para buscar eventos
         """
         
-        middle_time = datetime.datetime.strptime(date_time_str, "%H:%M:%S.%f").time()
+        middle_time = datetime.strptime(date_time_str, "%H:%M:%S.%f")
         
-        start, end = middle_time - datetime.timedelta(seconds=0.5), middle_time + datetime.timedelta(seconds = 0.5)
+        
+        
+        start, end = middle_time + timedelta(seconds=0.5), middle_time + timedelta(seconds = 0.5)
+        
+        start = start.time()
+        end = end.time()
         # Consultar API externa
+        
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
@@ -87,6 +93,7 @@ class MatchEventsService:
                             "end": end},
                 )
                 response.raise_for_status()
+                
                 data = response.json()
                 
                 events = self._parse_events(data) # hacemos el parsing de nuestros eventos y los guardamos en una lista

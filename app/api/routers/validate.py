@@ -14,14 +14,14 @@ from app.schemas.io import CompleteResponse
 
 router = APIRouter(tags=["validate"])
 
-class MatchEvent:
+class MatchEvent(BaseModel):
     """Representa un evento del partido"""
-    def __init__(self, event_type, minute, team, player, timestamp):
-        self.event_type = event_type  # "goal", "corner", "foul", etc.
-        self.minute = minute
-        self.team = team
-        self.player = player
-        self.timestamp = timestamp
+    
+    event_type : str  # "goal", "corner", "foul", etc.
+    minute : int
+    team : str
+    player : str
+    timestamp : str
 
 
 class ValidateRequest(BaseModel):
@@ -165,12 +165,12 @@ async def verificar_si_es_gol(mock_event: MatchEvent): # Here a goal detected mu
         
         # Pass the mock event to this function.
         analysis_result = analysis_service().mock_analysis(mock_event) # implemented
-        
+                
         # Validar contra eventos reales
         validator = match_validator()
         
         # Detectar si es un gol
-        the_event = analysis_result.event_type.lower()
+        the_event = analysis_result.lower()
         
         if "goal" in the_event:
             # Validar gol detectado
@@ -179,13 +179,7 @@ async def verificar_si_es_gol(mock_event: MatchEvent): # Here a goal detected mu
             # Validar otro tipo de evento
             validation = await validator.validate_detected_event(mock_event)
                                     
-        return ValidatedAnalysisResponse(
-            analysis=None,
-            validation=validation,
-            is_live_event=None,
-            is_replay=None,
-            confidence_score=None
-        )
+        return validation
         
     except Exception as e:
         raise HTTPException(
